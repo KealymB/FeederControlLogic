@@ -35,5 +35,9 @@ class MenuDisplay {
     void backPressed(void);
     void upPressed(void);
     void downPressed(void);
+
+    bool shouldFeed(void);
+
+    uint8_t getHandfuls(void);
 };
 #endif

@@ -28,6 +28,7 @@ uint8_t feedQuantity = 0;
 //Time variables
 bool timesFeed[] = {false, false, false};
 uint8_t selectedTime = 0;
+uint8_t FeedInts[] = {7, 12, 18};
 
 //Day variables
 bool daysFeed[] = {false, false, false, false, false, false, false};
@@ -350,7 +351,6 @@ void MenuDisplay::nextFeed() {
   bool emptyTime = true;
   bool emptyDay = true;
   char *FeedStrings[] = {"07:00", "12:00", "18:00"};
-  uint8_t FeedInts[] = {7, 12, 18};
 
   //determine errors
   for(uint8_t i = 0; i < 3; i++){
@@ -619,4 +619,17 @@ void MenuDisplay::backPressed(void){
   prefs.putBytes("feedDays", &daysFeed, 7*sizeof(bool));
   
   prefs.end();
+}
+bool MenuDisplay::shouldFeed(void){
+  if(daysFeed[dateTime.getWeekDay()]){ //check if we are going to feed today
+    for(uint8_t i = 0; i < 3; i++){
+      if(FeedInts[i] == dateTime.getHour() && timesFeed[i]){//check if we should be feeding now
+        return true;
+      }
+    }  
+  }
+  return false;
+}
+uint8_t MenuDisplay::getHandfuls(void){
+  return feedQuantity;
 }
