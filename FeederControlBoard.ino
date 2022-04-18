@@ -18,18 +18,20 @@
 #define BTN_ENTER 14
 #define BTN_BACK 12
 
-Button2 btnBack;
-Button2 btnEnter;
-Button2 btnUp;
-Button2 btnDown;
-
-
 //Stepper params
 #define DIR 25
 #define STEP 26
 #define RPM 10
-#define MICROSTEPS 1 //need to double check
-#define MOTOR_STEPS 200 //need to double check
+#define MICROSTEPS 1
+#define MOTOR_STEPS 200
+
+//Hall effect sensor
+#define HALL_PIN 23
+
+Button2 btnBack;
+Button2 btnEnter;
+Button2 btnUp;
+Button2 btnDown;
 
 //Object for stepper motor
 DRV8825 stepper(MOTOR_STEPS, DIR, STEP);
@@ -40,7 +42,10 @@ Preferences prefrences;
 //Menu object for interacting with the display
 MenuDisplay menuDisplay;
 
+//class variables
 int feedState = -1; // -1: waiting for feedtime, 0: currently feeding, 1: finsihed feeding.
+bool positionKnown = false; //every time there is a power loss, position should be unknown. Need to home the stepper...
+int hallSensorReading = HIGH; //Stores reading of halleffect sensor
 
 void setup (){
   //Init serial for debugging
@@ -48,12 +53,12 @@ void setup (){
   
   //wait for serial to start
   delay(200);
-
+  
   stepper.begin(RPM, MOTOR_STEPS);
 
   //Get feedstate
   prefrences.begin("my-app", false); 
-  prefrences.getInt("feedState", feedState);
+  feedState = prefrences.getInt("feedState", -1);
   prefrences.end();
 
   menuDisplay.initValues();
@@ -68,6 +73,12 @@ void setup (){
   btnEnter.setTapHandler(btnPressed);
   btnDown.setTapHandler(btnPressed);
   btnUp.setTapHandler(btnPressed);
+
+  pinMode(HALL_PIN, INPUT);    //sets the hall effect sensor pin as input
+
+  if(not positionKnown){
+    menuDisplay.setError(2);
+  }
 }
 void loop()
 {
@@ -78,9 +89,14 @@ void loop()
     btnUp.loop();
     btnDown.loop();
 
+    if(positionKnown){
+      feedHandler();
+    }else{
+      homeStepper();
+    }
+
     menuDisplay.drawMenu();
-    feedHandler();
-    delay(50); //refresh time
+    delay(20); //refresh time
 }
 
 void btnPressed (Button2& btn) {
@@ -122,4 +138,17 @@ void feedFish () {
   prefrences.begin("my-app", false); 
   prefrences.putInt("feedState", feedState);
   prefrences.end();
+}
+
+void homeStepper () {
+  Serial.write("Hall reading: ");
+  Serial.print(hallSensorReading, DEC);
+  Serial.write("\n");
+    
+  stepper.move(5*MICROSTEPS);    
+  hallSensorReading = digitalRead(HALL_PIN);
+  if(hallSensorReading == LOW){
+    positionKnown = true;
+    menuDisplay.setError(0);
+  }
 }

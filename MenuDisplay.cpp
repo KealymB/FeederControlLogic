@@ -14,6 +14,9 @@ Adafruit_SH1106G display = Adafruit_SH1106G(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, 
 
 //global error var
 uint8_t Error = 0;
+const uint8_t NO_ERR = 0;
+const uint8_t RTC_ERR = 1;
+const uint8_t HOMING_ERR = 2;
 
 //Settings variables
 int selectedSetting = -1;
@@ -77,10 +80,8 @@ void MenuDisplay::drawMenu() {
     display.drawRoundRect(87, 4, 37, 13, 3, SH110X_WHITE); // clock outline
 
     if(!dateTime.readDateTime()){
-      setError(1);
+      setError(RTC_ERR);
       Serial.println("Failed to read date Time");
-    }else{
-      setError(0);
     }
     
     char *day = (char*) malloc(4);
@@ -116,6 +117,9 @@ void MenuDisplay::mainMenu(){
     //error display
     if(Error == 1){
       writeStr("Error reading RTC", 5, 28, 1);
+    }
+    if(Error == 2){
+      writeStr("Homing motor, please wait", 5, 28, 1);
     }
   }
   
@@ -416,8 +420,6 @@ void MenuDisplay::setError(uint8_t error){
 }
 
 void MenuDisplay::enterPressed(void){
-  Serial.write("enterPressed, called\n");
-
   //Main menu action
   if(selectedScreen == 0){
     //if settings menu, fetch the current hour and min
@@ -428,7 +430,6 @@ void MenuDisplay::enterPressed(void){
         selectedMin = dateTime.getMin();
     }
     selectedScreen = selectedItem + 1;
-    Serial.write("TEst\n");
     return;
   }
   
@@ -457,14 +458,12 @@ void MenuDisplay::enterPressed(void){
 
   //Time menu action
   if(selectedScreen == 2){
-    Serial.write("time menu action, called\n");
     timesFeed[selectedTime] = !timesFeed[selectedTime];
     return;
   }
 }
 
 void MenuDisplay::downPressed(void){
-  Serial.write("downPressed, called\n");
   //Main menu action
   if(selectedScreen == 0){
     if(selectedItem>0){
@@ -535,8 +534,6 @@ void MenuDisplay::downPressed(void){
   }
 }
 void MenuDisplay::upPressed(void){
-  Serial.write("upPressed, called\n");
-  
   //Main menu action
   if(selectedScreen == 0){
     if(selectedItem<3){
@@ -607,7 +604,6 @@ void MenuDisplay::upPressed(void){
   }
 }
 void MenuDisplay::backPressed(void){
-  Serial.write("backpressed, called\n");
   selectedScreen = 0;
   selectedSetting = -1;
 
