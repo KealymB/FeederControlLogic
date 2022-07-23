@@ -1,16 +1,11 @@
 #include "MenuDisplay.h"
 #include "DateTime.h"
 #include <Wire.h>
-#include <Adafruit_GFX.h>
-#include <Adafruit_SH110X.h>
-#include <Preferences.h>
+#include <EEPROM.h>
+#include <U8g2lib.h>
 
 //screen def
-#define i2c_Address 0x3c 
-#define SCREEN_WIDTH 128
-#define SCREEN_HEIGHT 64
-#define OLED_RESET -1
-Adafruit_SH1106G display = Adafruit_SH1106G(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+U8G2_SH1106_128X64_NONAME_1_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
 
 //global error var
 uint8_t Error = 0;
@@ -44,68 +39,69 @@ uint8_t selectedItem = 0;
 //Date time object for interacting with RTC
 DateTime dateTime;
 
-//reading and writing to eeprom
-Preferences prefs;
-
 MenuDisplay::MenuDisplay() {
 }
 
 void MenuDisplay::initValues() {
+  Serial.write("menu0");
   delay(250); // wait for the OLED to power up
-  display.begin(i2c_Address, true);  
-  display.clearDisplay();
+  Serial.write("menu01");
+  u8g2.begin();
+  Serial.write("menu02");
+  
+  u8g2.setFont(u8g2_font_6x10_tf);
+  u8g2.setFontRefHeightExtendedText();
+  u8g2.setDrawColor(1);
+  u8g2.setFontPosTop();
+  u8g2.setFontDirection(0);
+
+  Serial.write("menu1");
   
   //set up RTC read
   dateTime.init();
-  
+    
   //Read values stored in prefrences
-  prefs.begin("my-app", false); 
-  
-  prefs.getBytes("feedTimes", &timesFeed, 4*sizeof(bool));
-  prefs.getBytes("feedDays", &daysFeed, 7*sizeof(bool));
-  feedQuantity = (uint8_t) prefs.getUChar("quantity", 0);
-  
-  prefs.end();
-}
-
-void MenuDisplay::clearDisplay() {
-  display.clearDisplay();
+  EEPROM.get(20, timesFeed);
+  EEPROM.get(40, daysFeed);
+  EEPROM.get(60, feedQuantity);
 }
 
 void MenuDisplay::drawMenu() {
-    //draws border line
-    display.drawRoundRect(0, 0, display.width(), display.height(), 3, SH110X_WHITE);
+    u8g2.firstPage();
+    do {
+      //draws border line
+      u8g2.drawRFrame(0, 0, 128, 64, 3);
+      
+      //clock draw
+      u8g2.drawRFrame(87, 4, 37, 13, 3); // clock outline
+  
+      if(!dateTime.readDateTime()){
+        setError(RTC_ERR);
+        Serial.println("Failed to read date Time");
+      }
+      
+      char *day = (char*) malloc(4);
+      writeStr(dateTime.getDayString(day), 6, 7);
+      free(day);
+  
+      char *_time = (char*) malloc(20);
+      writeStr(dateTime.getTimeString(_time), 91, 7, 1);
+      free(_time);
+      
+      //Menu logic
+      if (selectedScreen == 0){
+        mainMenu();
+      }else if(selectedScreen == 1){
+        feedMenu();
+      }else if(selectedScreen == 2){
+        timeMenu();
+      }else if(selectedScreen == 3){
+        dayMenu();
+      }else if(selectedScreen == 4){
+        settingsMenu();
+      }
     
-    //clock draw
-    display.drawRoundRect(87, 4, 37, 13, 3, SH110X_WHITE); // clock outline
-
-    if(!dateTime.readDateTime()){
-      setError(RTC_ERR);
-      Serial.println("Failed to read date Time");
-    }
-    
-    char *day = (char*) malloc(4);
-    writeStr(dateTime.getDayString(day), 6, 7);
-    free(day);
-
-    char *_time = (char*) malloc(20);
-    writeStr(dateTime.getTimeString(_time), 91, 7, 1);
-    free(_time);
-    
-    //Menu logic
-    if (selectedScreen == 0){
-      mainMenu();
-    }else if(selectedScreen == 1){
-      feedMenu();
-    }else if(selectedScreen == 2){
-      timeMenu();
-    }else if(selectedScreen == 3){
-      dayMenu();
-    }else if(selectedScreen == 4){
-      settingsMenu();
-    }
-    
-    display.display();
+    } while( u8g2.nextPage() );
 }
 
 //selectedScreen == 0
@@ -124,180 +120,180 @@ void MenuDisplay::mainMenu(){
   }
   
   // feed, time and days outlines
-  display.drawRoundRect(5, 47, 36, 13, 3, SH110X_WHITE);
-  display.drawRoundRect(46, 47, 35, 13, 3, SH110X_WHITE);
-  display.drawRoundRect(86, 47, 36, 13, 3, SH110X_WHITE);
+  u8g2.drawRFrame(5, 47, 36, 13, 3);
+  u8g2.drawRFrame(46, 47, 35, 13, 3);
+  u8g2.drawRFrame(86, 47, 36, 13, 3);
   
   if(selectedItem == 0){
-    display.drawRoundRect(4, 46, 38, 15, 4, SH110X_WHITE);
+    u8g2.drawRFrame(4, 46, 38, 15, 4);
   }
   writeStr("FEED", 12, 50, 1);
   
   if(selectedItem == 1){
-    display.drawRoundRect(45, 46, 37, 15, 4, SH110X_WHITE);
+    u8g2.drawRFrame(45, 46, 37, 15, 4);
   }
   writeStr("TIME", 53, 50, 1);
   
   if(selectedItem == 2){
-    display.drawRoundRect(85, 46, 38, 15, 4, SH110X_WHITE);
+    u8g2.drawRFrame(85, 46, 38, 15, 4);
   }
   writeStr("DAYS", 93, 50, 1);
 
   //hover clock if selected
   if(selectedItem == 3){
-    display.drawRoundRect(86, 3, 39, 15, 4, SH110X_WHITE);
+    u8g2.drawRFrame(86, 3, 39, 15, 4);
   }
 }
 
 //selectedScreen == 1
 void MenuDisplay::feedMenu(){
   //clock
-  display.fillRoundRect(29, 47, 70, 13, 3, SH110X_WHITE);
+  u8g2.drawRBox(29, 47, 70, 13, 3);
   writeStr("Handfuls", 40, 50, 0);
   // feed counter
-  display.drawRoundRect(18, 19, 92, 26, 3, SH110X_WHITE);
+  u8g2.drawRFrame(18, 19, 92, 26, 3);
   for(uint8_t i = 0; i < 5; i++){
-    display.drawRoundRect(21+i*18, 22, 14, 20, 3, SH110X_WHITE);
+    u8g2.drawRFrame(21+i*18, 22, 14, 20, 3);
   }
 
   for(uint8_t i = 0; i < feedQuantity+1; i++){
-    display.fillRoundRect(21+i*18, 22, 14, 20, 3, SH110X_WHITE);
+    u8g2.drawRBox(21+i*18, 22, 14, 20, 3);
   }
 }
 
 //selectedScreen == 2
 void MenuDisplay::timeMenu(){
   //bottom label
-  display.fillRoundRect(29, 47, 70, 13, 3, SH110X_WHITE);
+  u8g2.drawRBox(29, 47, 70, 13, 3);
   writeStr("Feed Times", 35, 50, 0);
 
   if(timesFeed[0]){
-    display.fillRoundRect(5, 20, 36, 21, 3, SH110X_WHITE);
+    u8g2.drawRBox(5, 20, 36, 21, 3);
     writeStr("7 AM", 11, 27, 0);
   }else{
-      display.drawRoundRect(5, 20, 36, 21, 3, SH110X_WHITE);
+      u8g2.drawRFrame(5, 20, 36, 21, 3);
       writeStr("7 AM", 11, 27, 1);
   }
   if(selectedTime == 0){
-    display.drawRoundRect(4, 19, 38, 23, 4, SH110X_WHITE);
+    u8g2.drawRFrame(4, 19, 38, 23, 4);
   }
 
   if(timesFeed[1]){
-    display.fillRoundRect(46, 20, 36, 21, 3, SH110X_WHITE);
+    u8g2.drawRBox(46, 20, 36, 21, 3);
     writeStr("12 PM", 49, 27, 0);
   }else{
-      display.drawRoundRect(46, 20, 36, 21, 3, SH110X_WHITE);
+      u8g2.drawRFrame(46, 20, 36, 21, 3);
       writeStr("12 PM", 49, 27, 1);
   }
   if(selectedTime == 1){
-    display.drawRoundRect(45, 19, 38, 23, 4, SH110X_WHITE);
+    u8g2.drawRFrame(45, 19, 38, 23, 4);
   }
 
   if(timesFeed[2]){
-    display.fillRoundRect(87, 20, 36, 21, 3, SH110X_WHITE);
+   u8g2.drawRBox(87, 20, 36, 21, 3);
     writeStr("6 PM", 93, 27, 0);
   }else{
-      display.drawRoundRect(87, 20, 36, 21, 3, SH110X_WHITE);
+      u8g2.drawRFrame(87, 20, 36, 21, 3);
       writeStr("6 PM", 93, 27, 1);
   }
   if(selectedTime == 2){
-    display.drawRoundRect(86, 19, 38, 23, 4, SH110X_WHITE);
+    u8g2.drawRFrame(86, 19, 38, 23, 4);
   }
 }
 
 //selectedScreen == 3
 void MenuDisplay::dayMenu(){
   //clock
-  display.fillRoundRect(29, 47, 70, 13, 3, SH110X_WHITE);
+  u8g2.drawRBox(29, 47, 70, 13, 3);
   writeStr("Feed Days", 35, 50, 0);
 
   if(daysFeed[0]){
-    display.fillRoundRect(14, 20, 22, 11, 3, SH110X_WHITE);
+    u8g2.drawRBox(14, 20, 22, 11, 3);
     writeStr("S", 22, 22, 0);
   }else{
-    display.drawRoundRect(14, 20, 22, 11, 3, SH110X_WHITE);
+    u8g2.drawRFrame(14, 20, 22, 11, 3);
     writeStr("S", 22, 22, 1);
   }
 
   if(selectedDay == 0){
-    display.drawRoundRect(13, 19, 24, 13, 4, SH110X_WHITE);
+    u8g2.drawRFrame(13, 19, 24, 13, 4);
   }
 
   if(daysFeed[1]){
-    display.fillRoundRect(40, 20, 22, 11, 3, SH110X_WHITE);
+    u8g2.drawRFrame(40, 20, 22, 11, 3);
     writeStr("M", 48, 22, 0);
   }else{
-    display.drawRoundRect(40, 20, 22, 11, 3, SH110X_WHITE);
+    u8g2.drawRFrame(40, 20, 22, 11, 3);
     writeStr("M", 48, 22, 1);
   }
 
   if(selectedDay == 1){
-    display.drawRoundRect(39, 19, 24, 13, 4, SH110X_WHITE);
+    u8g2.drawRFrame(39, 19, 24, 13, 4);
   }
 
   if(daysFeed[2]){
-    display.fillRoundRect(66, 20, 22, 11, 3, SH110X_WHITE);
+    u8g2.drawRBox(66, 20, 22, 11, 3);
     writeStr("T", 74, 22, 0);
   }else{
-    display.drawRoundRect(66, 20, 22, 11, 3, SH110X_WHITE);
+    u8g2.drawRFrame(66, 20, 22, 11, 3);
     writeStr("T", 74, 22, 1);
   }
 
   if(selectedDay == 2){
-    display.drawRoundRect(65, 19, 24, 13, 4, SH110X_WHITE);
+    u8g2.drawRFrame(65, 19, 24, 13, 4);
   }
 
   if(daysFeed[3]){
-    display.fillRoundRect(92, 20, 22, 11, 3, SH110X_WHITE);
+    u8g2.drawRBox(92, 20, 22, 11, 3);
     writeStr("W", 100, 22, 0);
   }else{
-    display.drawRoundRect(92, 20, 22, 11, 3, SH110X_WHITE);
+    u8g2.drawRFrame(92, 20, 22, 11, 3);
     writeStr("W", 100, 22, 1);
   }
 
   if(selectedDay == 3){
-    display.drawRoundRect(91, 19, 24, 13, 4, SH110X_WHITE);
+    u8g2.drawRFrame(91, 19, 24, 13, 4);
   }
 
   if(daysFeed[4]){
-    display.fillRoundRect(28, 33, 22, 11, 3, SH110X_WHITE);
+    u8g2.drawRBox(28, 33, 22, 11, 3);
     writeStr("T", 36, 35, 0);
   }else{
-    display.drawRoundRect(28, 33, 22, 11, 3, SH110X_WHITE);
+    u8g2.drawRFrame(28, 33, 22, 11, 3);
     writeStr("T", 36, 35, 1);
   }
 
   if(selectedDay == 4){
-    display.drawRoundRect(27, 32, 24, 13, 4, SH110X_WHITE);
+    u8g2.drawRFrame(27, 32, 24, 13, 4);
   }
 
   if(daysFeed[5]){
-    display.fillRoundRect(54, 33, 22, 11, 3, SH110X_WHITE);
+    u8g2.drawRBox(54, 33, 22, 11, 3);
     writeStr("F", 62, 35, 0);
   }else{
-    display.drawRoundRect(54, 33, 22, 11, 3, SH110X_WHITE);
+    u8g2.drawRFrame(54, 33, 22, 11, 3);
     writeStr("F", 62, 35, 1);
   }
   if(selectedDay == 5){
-    display.drawRoundRect(53, 32, 24, 13, 4, SH110X_WHITE);
+    u8g2.drawRFrame(53, 32, 24, 13, 4);
   }
 
   if(daysFeed[6]){
-    display.fillRoundRect(80, 33, 22, 11, 3, SH110X_WHITE);
+    u8g2.drawRBox(80, 33, 22, 11, 3);
     writeStr("S", 88, 35, 0);
   }else{
-    display.drawRoundRect(80, 33, 22, 11, 3, SH110X_WHITE);
+    u8g2.drawRFrame(80, 33, 22, 11, 3);
     writeStr("S", 88, 35, 1);
   }
   if(selectedDay == 6){
-    display.drawRoundRect(79, 32, 24, 13, 4, SH110X_WHITE);
+    u8g2.drawRFrame(79, 32, 24, 13, 4);
   }
 }
 
 //selectedScreen 4
 void MenuDisplay::settingsMenu(){
   //clock
-  display.fillRoundRect(29, 47, 70, 13, 3, SH110X_WHITE);
+  u8g2.drawRBox(29, 47, 70, 13, 3);
   writeStr("Settings", 42, 50, 0);
 
   //string of current day of week 
@@ -305,45 +301,45 @@ void MenuDisplay::settingsMenu(){
   dateTime.getDayString(weekDayString, selectedWDay);
 
   if(selectedSetting == 0){
-    display.fillRoundRect(5, 20, 36, 21, 3, SH110X_WHITE);
+    u8g2.drawRBox(5, 20, 36, 21, 3);
     writeStr(weekDayString, 14, 27, 0);
   }else{
-    display.drawRoundRect(5, 20, 36, 21, 3, SH110X_WHITE);
+    u8g2.drawRFrame(5, 20, 36, 21, 3);
     writeStr(weekDayString, 14, 27, 1);
   }
   free(weekDayString);
   if(hoveredSetting == 0){
-    display.drawRoundRect(4, 19, 38, 23, 4, SH110X_WHITE);
+    u8g2.drawRFrame(4, 19, 38, 23, 4);
   }
 
   char hourText [3];
   snprintf(hourText, sizeof(hourText), "%u", selectedHour);
 
   if(selectedSetting == 1){
-    display.fillRoundRect(46, 20, 36, 21, 3, SH110X_WHITE);
+    u8g2.drawRFrame(46, 20, 36, 21, 3);
     writeStr(hourText, 60, 27, 0);
   }else{
-      display.drawRoundRect(46, 20, 36, 21, 3, SH110X_WHITE);
+      u8g2.drawRFrame(46, 20, 36, 21, 3);
       writeStr(hourText, 60, 27, 1);
   }
 
   if(hoveredSetting == 1){
-    display.drawRoundRect(45, 19, 38, 23, 4, SH110X_WHITE);
+   u8g2.drawRFrame(45, 19, 38, 23, 4);
   }
 
   char minText [3];
   snprintf(minText, sizeof(minText), "%u", selectedMin);
 
   if(selectedSetting == 2){
-    display.fillRoundRect(87, 20, 36, 21, 3, SH110X_WHITE);
+    u8g2.drawRBox(87, 20, 36, 21, 3);
     writeStr(minText, 100, 27, 0);
   }else{
-      display.drawRoundRect(87, 20, 36, 21, 3, SH110X_WHITE);
+      u8g2.drawRFrame(87, 20, 36, 21, 3);
       writeStr(minText, 100, 27, 1);
   }
 
   if(hoveredSetting == 2){
-    display.drawRoundRect(86, 19, 38, 23, 4, SH110X_WHITE);
+    u8g2.drawRFrame(86, 19, 38, 23, 4);
   }
 }
 
@@ -408,11 +404,10 @@ void MenuDisplay::nextFeed() {
 
 void MenuDisplay::writeStr(char* str, int x, int y, uint8_t color) {
   // writes a string to the display at x, y
-  display.setTextSize(1);
-  display.setTextColor(color);
-  display.setCursor(x, y);
 
-  display.write(str);
+  u8g2.setDrawColor(color);
+  u8g2.drawStr(x, y-1, str);
+  u8g2.setDrawColor(1);
 }
 
 void MenuDisplay::setError(uint8_t error){
@@ -608,13 +603,18 @@ void MenuDisplay::backPressed(void){
   selectedSetting = -1;
 
   // save all data
-  prefs.begin("my-app", false); 
+
+  EEPROM.put(20, timesFeed);
+  EEPROM.put(40, daysFeed);
+  EEPROM.put(60, feedQuantity);
   
-  prefs.putUChar("quantity", feedQuantity);
-  prefs.putBytes("feedTimes", &timesFeed, 3*sizeof(bool));
-  prefs.putBytes("feedDays", &daysFeed, 7*sizeof(bool));
-  
-  prefs.end();
+//  prefs.begin("my-app", false); 
+//  
+//  prefs.putUChar("quantity", feedQuantity);
+//  prefs.putBytes("feedTimes", &timesFeed, 3*sizeof(bool));
+//  prefs.putBytes("feedDays", &daysFeed, 7*sizeof(bool));
+//  
+//  prefs.end();
 }
 bool MenuDisplay::shouldFeed(void){
   if(daysFeed[dateTime.getWeekDay()]){ //check if we are going to feed today
